@@ -418,3 +418,51 @@ func (r *RKRequest) GetRemote(name string) (string, int) {
 
 	return resp.Msg, resp.Code
 }
+
+func (r *RKRequest) SingleCodeLogin(cardnum string) (string, string, int) {
+	r.Businessid = 4
+	r.RequestFlag = strconv.FormatInt(time.Now().UnixMilli()<<5, 10)
+	data := map[string]interface{}{
+		"requestflag": r.RequestFlag,
+		"maccode":     r.MacCode,
+		"timestamp":   time.Now().UnixMilli(),
+		"cardnum":     cardnum,
+	}
+	d, _ := json.Marshal(data)
+	cipherText, _ := CipherDES.DESEncrypt(d)
+	r.Data = cipherText
+
+	resp, err := r.SignAndRequest()
+	if err != nil {
+		return "", "单码登录失败，请重试", -1
+	}
+
+	plain, err := CipherDES.DESDecrypt(resp.Data)
+	if err != nil {
+		log.Println("单码登录登录解密失败:", resp)
+		return "", resp.Msg, resp.Code
+	}
+
+	type loginResp struct {
+		RequestFlag  string `json:"requestflag"`
+		Token        string `json:"token"`
+		HeartbeatKey string `json:"heartbeatkey"`
+		EndTime      string `json:"endtime"`
+	}
+	rp := &loginResp{}
+	err = json.Unmarshal([]byte(plain), rp)
+	if err != nil {
+		log.Println(err)
+	}
+
+	if r.RequestFlag != rp.RequestFlag || rp.EndTime == "" || rp.HeartbeatKey == "" {
+		fmt.Println("flag不一致、endtime or hearbeat key is nil，退出！", *rp)
+		os.Exit(-1)
+	}
+
+	r.Token = rp.Token
+	r.HeartbeatKey = rp.HeartbeatKey
+	r.EndTime = rp.EndTime
+
+	return r.Username, resp.Msg, resp.Code
+}
