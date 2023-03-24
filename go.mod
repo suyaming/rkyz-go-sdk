@@ -1,4 +1,4 @@
-module github.com/suyaming/rkyz-go-sdk
+module rkyz-go-sdk
 
 go 1.17
 
